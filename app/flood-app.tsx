@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Clock3, Crosshair, Droplets, HandHelping, ImagePlus, Layers3, ListFilter, Loader2, LocateFixed, Map as MapIcon, Plus, RefreshCw, Satellite, ShieldCheck, Trash2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -58,6 +58,7 @@ export function FloodApp() {
   const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<FloodReport | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const mapSectionRef = useRef<HTMLDivElement>(null);
 
   const loadReports = useCallback(async () => {
     try {
@@ -115,6 +116,13 @@ export function FloodApp() {
     }, () => { setLocating(false); toast.error("ไม่สามารถเข้าถึงตำแหน่งได้", { description: "อนุญาตการเข้าถึงตำแหน่ง แล้วลองใหม่อีกครั้ง" }); }, { enableHighAccuracy: true, timeout: 10_000 });
   }, []);
 
+  const selectFromList = useCallback((id: string) => {
+    setSelectedId(id);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      window.requestAnimationFrame(() => mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  }, []);
+
   async function confirmDelete() {
     if (!deleteTarget) return;
     const token = readTokens()[deleteTarget.id];
@@ -143,7 +151,7 @@ export function FloodApp() {
       </header>
 
       <section className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] min-h-[calc(100vh-80px)] lg:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="relative w-full min-w-0 max-w-full min-h-[60dvh] overflow-hidden border-b border-slate-200 lg:min-h-0 lg:border-b-0 lg:border-r">
+        <div ref={mapSectionRef} className="relative w-full min-w-0 max-w-full min-h-[60dvh] scroll-mt-0 overflow-hidden border-b border-slate-200 lg:min-h-0 lg:border-b-0 lg:border-r">
           <FloodMap reports={visibleReports} position={position} locationReady={locationReady} selectedId={selectedId} mapStyle={mapStyle} onSelect={setSelectedId} onPickLocation={(lat, lng) => { setPosition([lat, lng]); setLocationReady(true); setSelectedId(null); }} />
           <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] p-3 sm:p-5">
             <div className="flex items-start justify-between gap-2">
@@ -172,7 +180,7 @@ export function FloodApp() {
             <div className="mt-4 flex gap-2 overflow-x-auto pb-1 scrollbar-none"><FilterButton active={filter === "all"} onClick={() => setFilter("all")}><ListFilter className="h-4 w-4" />ทั้งหมด</FilterButton><FilterButton active={filter === "flood"} onClick={() => setFilter("flood")} dot="#f97316">น้ำท่วม</FilterButton><FilterButton active={filter === "help"} onClick={() => setFilter("help")} dot="#2563eb">ขอความช่วยเหลือ</FilterButton>{(Object.keys(severityMeta) as Severity[]).map((key) => <FilterButton key={key} active={filter === key} onClick={() => setFilter(key)} dot={severityMeta[key].color}>{severityMeta[key].label}</FilterButton>)}</div>
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4">
-            {loading ? <div className="grid h-52 place-items-center text-sm text-slate-500"><span className="text-center"><Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-[#0a8d80]" />กำลังโหลดรายงาน...</span></div> : visibleReports.length === 0 ? <EmptyState onCreate={() => openForm("flood")} /> : <div className="space-y-3">{visibleReports.map((report) => <ReportCard key={report.id} report={report} active={selectedId === report.id} canDelete={ownedIds.has(report.id)} onClick={() => setSelectedId(report.id)} onDelete={() => setDeleteTarget(report)} />)}</div>}
+            {loading ? <div className="grid h-52 place-items-center text-sm text-slate-500"><span className="text-center"><Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-[#0a8d80]" />กำลังโหลดรายงาน...</span></div> : visibleReports.length === 0 ? <EmptyState onCreate={() => openForm("flood")} /> : <div className="space-y-3">{visibleReports.map((report) => <ReportCard key={report.id} report={report} active={selectedId === report.id} canDelete={ownedIds.has(report.id)} onClick={() => selectFromList(report.id)} onDelete={() => setDeleteTarget(report)} />)}</div>}
           </div>
           <div className="border-t border-slate-100 bg-[#f7fbfc] p-4"><p className="flex items-start gap-2 text-xs leading-5 text-slate-500"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#0a8d80]" />ข้อมูลมาจากผู้ใช้งาน โปรดตรวจสอบประกาศทางการก่อนเดินทาง หากเป็นเหตุฉุกเฉินโทร 191 หรือ 1669</p></div>
         </aside>
