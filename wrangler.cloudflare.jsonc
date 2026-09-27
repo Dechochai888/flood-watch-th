@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "flood-watch-th",
+  "main": "./dist/server/index.js",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "takongsaypeykub.online",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./dist/client"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "flood-watch-db",
+      "database_id": "898c9d78-e04e-42d1-aa84-2259121f7640"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "flood-watch-images"
+    }
+  ]
+}
