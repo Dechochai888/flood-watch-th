@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "น้ำท่วมไหน — แผนที่แจ้งเตือนน้ำท่วมจากชุมชน",
-  description: "แจ้งและติดตามจุดน้ำท่วมบนแผนที่ พร้อมรูปภาพ ระดับน้ำ และพิกัดจากคนในพื้นที่",
+  title: "น้ำท่วมไหน #ฉะเชิงเทราเราช่วยกัน",
+  description: "แผนที่ชุมชนสำหรับแจ้งจุดน้ำท่วมและขอความช่วยเหลือในฉะเชิงเทรา พร้อมรูปภาพ ระดับน้ำ และพิกัด",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

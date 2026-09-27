@@ -9,6 +9,11 @@ export const floodReports = sqliteTable("flood_reports", {
   description: text("description").notNull(),
   areaName: text("area_name").notNull().default(""),
   imageKey: text("image_key"),
+  reportType: text("report_type", { enum: ["flood", "help"] }).notNull().default("flood"),
+  contactName: text("contact_name").notNull().default(""),
+  contactPhone: text("contact_phone").notNull().default(""),
+  helpNeeds: text("help_needs").notNull().default(""),
+  deleteSecretHash: text("delete_secret_hash"),
   createdAt: integer("created_at").notNull(),
 }, (table) => [
   index("idx_flood_reports_created_at").on(table.createdAt),

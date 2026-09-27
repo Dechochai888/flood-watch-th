@@ -8,6 +8,13 @@
       "when": 1790509644916,
       "tag": "0000_nice_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790518452622,
+      "tag": "0001_illegal_mantis",
+      "breakpoints": true
     }
   ]
 }
