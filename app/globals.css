@@ -50,9 +50,8 @@ button, input, textarea { font: inherit; }
 .leaflet-control-zoom { border: 0 !important; box-shadow: 0 8px 24px rgba(15, 42, 51, .15) !important; }
 .leaflet-control-zoom a { color: #073b4c !important; border: 0 !important; }
 .flood-marker-wrap, .picker-marker-wrap { background: transparent !important; border: 0 !important; }
-.flood-marker { position: relative; width: 42px; height: 42px; border: 4px solid white; border-radius: 50% 50% 50% 8px; transform: rotate(-45deg); background: var(--marker); box-shadow: 0 5px 18px rgba(15,42,51,.28); transition: transform .2s ease; }
-.flood-marker span { position: absolute; inset: 9px; border-radius: 50%; background: rgba(255,255,255,.92); }
-.flood-marker.is-selected { transform: rotate(-45deg) scale(1.22); box-shadow: 0 0 0 7px color-mix(in srgb, var(--marker) 24%, transparent), 0 8px 20px rgba(15,42,51,.35); }
-.picker-marker { position: relative; width: 32px; height: 32px; border: 4px solid white; border-radius: 50% 50% 50% 8px; transform: rotate(-45deg); background: #087e72; box-shadow: 0 4px 16px rgba(7,59,76,.4); }
-.picker-marker span { position: absolute; inset: 8px; border-radius: 50%; background: white; }
+.flood-marker { display: block; width: 40px; height: 50px; padding: 0; border: 0; background: transparent; filter: drop-shadow(0 5px 7px rgba(15,42,51,.3)); transform-origin: 50% 98%; transition: transform .2s ease, filter .2s ease; }
+.flood-marker svg, .picker-marker svg { display: block; width: 40px; height: 50px; overflow: visible; }
+.flood-marker.is-selected { transform: scale(1.2); filter: drop-shadow(0 6px 9px rgba(15,42,51,.42)); }
+.picker-marker { display: block; width: 40px; height: 50px; filter: drop-shadow(0 5px 7px rgba(7,59,76,.4)); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }

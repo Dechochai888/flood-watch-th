@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import type { FloodReport } from "./flood-app";
 
@@ -19,6 +19,7 @@ export function FloodMap({ reports, position, locationReady, selectedId, onSelec
   const markerLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const pickerRef = useRef<import("leaflet").Marker | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -34,6 +35,7 @@ export function FloodMap({ reports, position, locationReady, selectedId, onSelec
       markerLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
       map.on("click", (event) => onPickLocation(event.latlng.lat, event.latlng.lng));
+      setMapReady(true);
     });
     return () => {
       mounted = false;
@@ -45,27 +47,31 @@ export function FloodMap({ reports, position, locationReady, selectedId, onSelec
   useEffect(() => {
     const L = leafletRef.current;
     const layer = markerLayerRef.current;
-    if (!L || !layer) return;
+    if (!L || !layer || !mapReady) return;
     layer.clearLayers();
     reports.forEach((report) => {
       const icon = L.divIcon({
         className: "flood-marker-wrap",
-        html: `<button aria-label="จุดแจ้งน้ำท่วม" class="flood-marker ${report.id === selectedId ? "is-selected" : ""}" style="--marker:${colors[report.severity]}"><span></span></button>`,
-        iconSize: [42, 48], iconAnchor: [21, 45],
+        html: `<button aria-label="จุดแจ้งน้ำท่วม" class="flood-marker ${report.id === selectedId ? "is-selected" : ""}" style="--marker:${colors[report.severity]}"><svg viewBox="0 0 40 50" aria-hidden="true"><path d="M20 1.5C9.8 1.5 1.5 9.8 1.5 20c0 13.8 18.5 28.5 18.5 28.5S38.5 33.8 38.5 20C38.5 9.8 30.2 1.5 20 1.5Z" fill="var(--marker)" stroke="white" stroke-width="3"/><circle cx="20" cy="20" r="7" fill="white"/></svg></button>`,
+        iconSize: [40, 50], iconAnchor: [20, 49],
       });
       L.marker([report.latitude, report.longitude], { icon }).addTo(layer).on("click", () => onSelect(report.id));
     });
-  }, [reports, selectedId, onSelect]);
+  }, [reports, selectedId, onSelect, mapReady]);
 
   useEffect(() => {
     const L = leafletRef.current;
     const map = mapRef.current;
-    if (!L || !map || !locationReady) return;
+    if (!L || !map || !locationReady || !mapReady) return;
     map.flyTo(position, Math.max(map.getZoom(), 15), { duration: 0.8 });
-    const icon = L.divIcon({ className: "picker-marker-wrap", html: '<div class="picker-marker"><span></span></div>', iconSize: [32, 42], iconAnchor: [16, 39] });
+    const icon = L.divIcon({
+      className: "picker-marker-wrap",
+      html: '<div class="picker-marker"><svg viewBox="0 0 40 50" aria-hidden="true"><path d="M20 1.5C9.8 1.5 1.5 9.8 1.5 20c0 13.8 18.5 28.5 18.5 28.5S38.5 33.8 38.5 20C38.5 9.8 30.2 1.5 20 1.5Z" fill="#087e72" stroke="white" stroke-width="3"/><circle cx="20" cy="20" r="7" fill="white"/></svg></div>',
+      iconSize: [40, 50], iconAnchor: [20, 49],
+    });
     if (!pickerRef.current) pickerRef.current = L.marker(position, { icon, zIndexOffset: 1000 }).addTo(map);
     else pickerRef.current.setLatLng(position);
-  }, [position, locationReady]);
+  }, [position, locationReady, mapReady]);
 
   return <div ref={containerRef} className="h-full min-h-[56vh] w-full bg-[#dcebee] lg:min-h-[calc(100vh-72px)]" aria-label="แผนที่จุดน้ำท่วม" />;
 }
