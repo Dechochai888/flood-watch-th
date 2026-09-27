@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let imageKey: string | null = null;
+  const imageKeys: string[] = [];
   try {
     const form = await request.formData();
     const latitude = Number(form.get("latitude"));
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const contactName = String(form.get("contactName") ?? "").trim().slice(0, 100);
     const contactPhone = String(form.get("contactPhone") ?? "").trim().slice(0, 30);
     const helpNeeds = String(form.get("helpNeeds") ?? "").trim().slice(0, 200);
-    const image = form.get("image");
+    const images = [...form.getAll("images"), form.get("image")].filter((item): item is File => item instanceof File && item.size > 0);
 
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
       return NextResponse.json({ error: "พิกัดไม่ถูกต้อง" }, { status: 400 });
@@ -43,18 +43,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "กรุณาระบุสิ่งที่ต้องการและเบอร์โทรติดต่อ" }, { status: 400 });
     }
 
+    if (images.length > 6) return NextResponse.json({ error: "อัปโหลดรูปได้ไม่เกิน 6 รูปต่อรายการ" }, { status: 400 });
+    for (const image of images) {
+      if (image.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(image.type)) {
+        return NextResponse.json({ error: "แต่ละรูปต้องเป็น JPG, PNG หรือ WebP ขนาดไม่เกิน 5 MB" }, { status: 400 });
+      }
+    }
+
     const id = crypto.randomUUID();
     const deleteToken = `${crypto.randomUUID()}${crypto.randomUUID()}`;
-    if (image instanceof File && image.size > 0) {
-      if (image.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(image.type)) {
-        return NextResponse.json({ error: "รองรับเฉพาะ JPG, PNG หรือ WebP ขนาดไม่เกิน 5 MB" }, { status: 400 });
-      }
-      imageKey = await saveReportImage(id, image);
-    }
-    const report = await saveFloodReport({ id, latitude, longitude, severity: severity as "low" | "medium" | "high", waterDepth, areaName, description, imageKey, reportType: reportType as "flood" | "help", contactName, contactPhone, helpNeeds, deleteSecretHash: await hashSecret(deleteToken) });
+    for (let index = 0; index < images.length; index += 1) imageKeys.push(await saveReportImage(id, images[index], index));
+    const report = await saveFloodReport({ id, latitude, longitude, severity: severity as "low" | "medium" | "high", waterDepth, areaName, description, imageKey: imageKeys[0] ?? null, imageKeys, reportType: reportType as "flood" | "help", contactName, contactPhone, helpNeeds, deleteSecretHash: await hashSecret(deleteToken) });
     return NextResponse.json({ report, deleteToken }, { status: 201 });
   } catch (error) {
-    if (imageKey) await deleteReportImage(imageKey).catch(() => undefined);
+    await Promise.all(imageKeys.map((key) => deleteReportImage(key).catch(() => undefined)));
     console.error("Failed to save flood report", error);
     return NextResponse.json({ error: "บันทึกรายงานไม่สำเร็จ กรุณาลองใหม่" }, { status: 503 });
   }

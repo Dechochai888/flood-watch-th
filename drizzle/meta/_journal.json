@@ -15,6 +15,13 @@
       "when": 1790518452622,
       "tag": "0001_illegal_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790528173430,
+      "tag": "0002_chunky_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ export const floodReports = sqliteTable("flood_reports", {
   description: text("description").notNull(),
   areaName: text("area_name").notNull().default(""),
   imageKey: text("image_key"),
+  imageKeys: text("image_keys").notNull().default(""),
   reportType: text("report_type", { enum: ["flood", "help"] }).notNull().default("flood"),
   contactName: text("contact_name").notNull().default(""),
   contactPhone: text("contact_phone").notNull().default(""),

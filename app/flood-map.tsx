@@ -81,6 +81,13 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
   }, [reports, selectedId, onSelect, mapReady]);
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !selectedId) return;
+    const selectedReport = reports.find((report) => report.id === selectedId);
+    if (selectedReport) map.flyTo([selectedReport.latitude, selectedReport.longitude], Math.max(map.getZoom(), 15), { duration: 0.8 });
+  }, [reports, selectedId, mapReady]);
+
+  useEffect(() => {
     const L = leafletRef.current;
     const map = mapRef.current;
     if (!L || !map || !locationReady || !mapReady) return;

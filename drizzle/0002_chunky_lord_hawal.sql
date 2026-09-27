@@ -1,0 +1,1 @@
+ALTER TABLE `flood_reports` ADD `image_keys` text DEFAULT '' NOT NULL;
