@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../vendor/shadcn-tailwind-4.13.0.css";
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+:root {
+  --background: #eef6f8;
+  --foreground: #102a33;
+  --card: #ffffff;
+  --card-foreground: #102a33;
+  --popover: #ffffff;
+  --popover-foreground: #102a33;
+  --primary: #073b4c;
+  --primary-foreground: #ffffff;
+  --secondary: #e7f7f5;
+  --secondary-foreground: #087e72;
+  --muted: #f1f6f7;
+  --muted-foreground: #64748b;
+  --accent: #d7f4ef;
+  --accent-foreground: #066d64;
+  --destructive: #e11d48;
+  --border: #dbe7ea;
+  --input: #dbe7ea;
+  --ring: #13b8a6;
+  --radius: 0.9rem;
+}
+
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground);
+  --color-card: var(--card); --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive); --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px); --radius-md: calc(var(--radius) - 2px); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Noto Sans Thai", "Leelawadee UI", Tahoma, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
+button, input, textarea { font: inherit; }
+.leaflet-container { font-family: var(--font-sans); }
+.leaflet-control-attribution { font-size: 10px !important; background: rgba(255,255,255,.78) !important; }
+.leaflet-control-zoom { border: 0 !important; box-shadow: 0 8px 24px rgba(15, 42, 51, .15) !important; }
+.leaflet-control-zoom a { color: #073b4c !important; border: 0 !important; }
+.flood-marker-wrap, .picker-marker-wrap { background: transparent !important; border: 0 !important; }
+.flood-marker { position: relative; width: 42px; height: 42px; border: 4px solid white; border-radius: 50% 50% 50% 8px; transform: rotate(-45deg); background: var(--marker); box-shadow: 0 5px 18px rgba(15,42,51,.28); transition: transform .2s ease; }
+.flood-marker span { position: absolute; inset: 9px; border-radius: 50%; background: rgba(255,255,255,.92); }
+.flood-marker.is-selected { transform: rotate(-45deg) scale(1.22); box-shadow: 0 0 0 7px color-mix(in srgb, var(--marker) 24%, transparent), 0 8px 20px rgba(15,42,51,.35); }
+.picker-marker { position: relative; width: 32px; height: 32px; border: 4px solid white; border-radius: 50% 50% 50% 8px; transform: rotate(-45deg); background: #087e72; box-shadow: 0 4px 16px rgba(7,59,76,.4); }
+.picker-marker span { position: absolute; inset: 8px; border-radius: 50%; background: white; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
