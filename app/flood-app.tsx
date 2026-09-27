@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Clock3, Crosshair, Droplets, HandHelping, ImagePlus, Layers3, ListFilter, Loader2, LocateFixed, Map as MapIcon, MapPin, Plus, RefreshCw, Satellite, ShieldCheck, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, Crosshair, Droplets, HandHelping, ImagePlus, Layers3, ListFilter, Loader2, LocateFixed, Map as MapIcon, Plus, RefreshCw, Satellite, ShieldCheck, Trash2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Toaster } from "@/components/ui/sonner";
@@ -71,7 +71,10 @@ export function FloodApp() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void loadReports(); }, [loadReports]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadReports(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadReports]);
 
   const openForm = useCallback((type: ReportType) => { setFormType(type); setReportOpen(true); }, []);
 

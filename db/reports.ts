@@ -30,8 +30,13 @@ export async function saveFloodReport(input: { id: string; latitude: number; lon
     INSERT INTO flood_reports (id, latitude, longitude, severity, water_depth, description, area_name, image_key, report_type, contact_name, contact_phone, help_needs, delete_secret_hash, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(input.id, input.latitude, input.longitude, input.severity, input.waterDepth, input.description, input.areaName, input.imageKey, input.reportType, input.contactName, input.contactPhone, input.helpNeeds, input.deleteSecretHash, createdAt).run();
-  const { deleteSecretHash: _, ...publicInput } = input;
-  return { ...publicInput, imageUrl: input.imageKey ? `/api/images/${input.imageKey}` : null, createdAt };
+  return {
+    id: input.id, latitude: input.latitude, longitude: input.longitude, severity: input.severity,
+    waterDepth: input.waterDepth, areaName: input.areaName, description: input.description,
+    imageKey: input.imageKey, reportType: input.reportType, contactName: input.contactName,
+    contactPhone: input.contactPhone, helpNeeds: input.helpNeeds,
+    imageUrl: input.imageKey ? `/api/images/${input.imageKey}` : null, createdAt,
+  };
 }
 
 export async function deleteFloodReport(id: string, deleteSecretHash: string) {

@@ -33,19 +33,23 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
   const baseLayerRef = useRef<import("leaflet").TileLayer | null>(null);
   const pickerRef = useRef<import("leaflet").Marker | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
+  const onPickLocationRef = useRef(onPickLocation);
+  const initialPositionRef = useRef(position);
   const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => { onPickLocationRef.current = onPickLocation; }, [onPickLocation]);
 
   useEffect(() => {
     let mounted = true;
     void import("leaflet").then((L) => {
       if (!mounted || !containerRef.current || mapRef.current) return;
       leafletRef.current = L;
-      const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(position, 12);
+      const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(initialPositionRef.current, 12);
       baseLayerRef.current = L.tileLayer(layers.street.url, layers.street.options).addTo(map);
       L.control.zoom({ position: "bottomright" }).addTo(map);
       markerLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
-      map.on("click", (event) => onPickLocation(event.latlng.lat, event.latlng.lng));
+      map.on("click", (event) => onPickLocationRef.current(event.latlng.lat, event.latlng.lng));
       setMapReady(true);
     });
     return () => { mounted = false; mapRef.current?.remove(); mapRef.current = null; };
