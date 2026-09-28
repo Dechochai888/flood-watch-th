@@ -20,11 +20,12 @@ const layers = {
 export type MapStyle = keyof typeof layers;
 type RainFrame = { time: number; path: string };
 
-export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, position, locationReady, selectedId, selectedRouteId, mapStyle, rainEnabled, onSelect, onSelectRoute, onPickLocation, onAddRoutePoint }: {
+export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, routeTracking, position, locationReady, selectedId, selectedRouteId, mapStyle, rainEnabled, onSelect, onSelectRoute, onPickLocation, onAddRoutePoint }: {
   reports: FloodReport[];
   safeRoutes: SafeRoute[];
   routePoints: [number, number][];
   routeDrawing: boolean;
+  routeTracking: boolean;
   position: [number, number];
   locationReady: boolean;
   selectedId: string | null;
@@ -181,10 +182,10 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, posit
     const layer = drawingLayerRef.current;
     if (!L || !layer || !mapReady) return;
     layer.clearLayers();
-    if (!routeDrawing || routePoints.length === 0) return;
-    if (routePoints.length > 1) L.polyline(routePoints, { color: "#0891b2", weight: 6, opacity: 0.95, dashArray: "10 8" }).addTo(layer);
+    if ((!routeDrawing && !routeTracking) || routePoints.length === 0) return;
+    if (routePoints.length > 1) L.polyline(routePoints, { color: routeTracking ? "#dc2626" : "#0891b2", weight: 6, opacity: 0.95, dashArray: routeTracking ? undefined : "10 8" }).addTo(layer);
     routePoints.forEach((point, index) => L.circleMarker(point, { radius: index === 0 ? 7 : 5, color: "white", weight: 2, fillColor: index === 0 ? "#16a34a" : "#0891b2", fillOpacity: 1 }).addTo(layer));
-  }, [routeDrawing, routePoints, mapReady]);
+  }, [routeDrawing, routeTracking, routePoints, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -205,7 +206,8 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, posit
     const L = leafletRef.current;
     const map = mapRef.current;
     if (!L || !map || !locationReady || !mapReady) return;
-    map.flyTo(position, Math.max(map.getZoom(), 15), { duration: 0.8 });
+    if (routeTracking) map.panTo(position, { animate: true, duration: 0.4 });
+    else map.flyTo(position, Math.max(map.getZoom(), 15), { duration: 0.8 });
     const icon = L.divIcon({
       className: "picker-marker-wrap",
       html: '<div class="picker-marker"><svg viewBox="0 0 40 50" aria-hidden="true"><path d="M20 1.5C9.8 1.5 1.5 9.8 1.5 20c0 13.8 18.5 28.5 18.5 28.5S38.5 33.8 38.5 20C38.5 9.8 30.2 1.5 20 1.5Z" fill="#087e72" stroke="white" stroke-width="3"/><circle cx="20" cy="20" r="7" fill="white"/></svg></div>',
@@ -213,7 +215,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, posit
     });
     if (!pickerRef.current) pickerRef.current = L.marker(position, { icon, zIndexOffset: 1000 }).addTo(map);
     else pickerRef.current.setLatLng(position);
-  }, [position, locationReady, mapReady]);
+  }, [position, locationReady, routeTracking, mapReady]);
 
   return <>
     <div ref={containerRef} className="h-full min-h-[60dvh] w-full bg-[#dcebee] lg:min-h-[calc(100vh-80px)]" aria-label="แผนที่จุดน้ำท่วมและขอความช่วยเหลือ" />
