@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
       return NextResponse.json({ error: "พิกัดไม่ถูกต้อง" }, { status: 400 });
     }
-    if (!["flood", "help"].includes(reportType) || !["low", "medium", "high"].includes(severity) || !Number.isFinite(waterDepth) || waterDepth < 0 || waterDepth > 500 || !description) {
+    if (!["flood", "help", "water_receded", "route_open"].includes(reportType) || !["low", "medium", "high"].includes(severity) || !Number.isFinite(waterDepth) || waterDepth < 0 || waterDepth > 500 || !description) {
       return NextResponse.json({ error: "กรุณากรอกข้อมูลสถานการณ์ให้ครบถ้วน" }, { status: 400 });
     }
     if (reportType === "help" && (!helpNeeds || !contactPhone)) {
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const id = crypto.randomUUID();
     const deleteToken = `${crypto.randomUUID()}${crypto.randomUUID()}`;
     for (let index = 0; index < images.length; index += 1) imageKeys.push(await saveReportImage(id, images[index], index));
-    const report = await saveFloodReport({ id, latitude, longitude, severity: severity as "low" | "medium" | "high", waterDepth, areaName, description, imageKey: imageKeys[0] ?? null, imageKeys, reportType: reportType as "flood" | "help", contactName, contactPhone, helpNeeds, deleteSecretHash: await hashSecret(deleteToken) });
+    const report = await saveFloodReport({ id, latitude, longitude, severity: severity as "low" | "medium" | "high", waterDepth, areaName, description, imageKey: imageKeys[0] ?? null, imageKeys, reportType: reportType as "flood" | "help" | "water_receded" | "route_open", contactName, contactPhone, helpNeeds, deleteSecretHash: await hashSecret(deleteToken) });
     return NextResponse.json({ report, deleteToken }, { status: 201 });
   } catch (error) {
     await Promise.all(imageKeys.map((key) => deleteReportImage(key).catch(() => undefined)));

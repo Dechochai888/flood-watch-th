@@ -139,10 +139,11 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
     if (!L || !layer || !mapReady) return;
     layer.clearLayers();
     reports.forEach((report) => {
-      const markerColor = report.reportType === "help" ? "#2563eb" : colors[report.severity];
+      const markerColor = report.reportType === "help" ? "#2563eb" : report.reportType === "water_receded" ? "#16a34a" : report.reportType === "route_open" ? "#0891b2" : colors[report.severity];
+      const markerLabel = report.reportType === "help" ? "จุดขอความช่วยเหลือ" : report.reportType === "water_receded" ? "จุดรายงานน้ำลด" : report.reportType === "route_open" ? "จุดรายงานเส้นทางผ่านได้" : "จุดแจ้งน้ำท่วม";
       const icon = L.divIcon({
         className: "flood-marker-wrap",
-        html: `<button aria-label="${report.reportType === "help" ? "จุดขอความช่วยเหลือ" : "จุดแจ้งน้ำท่วม"}" class="flood-marker ${report.id === selectedId ? "is-selected" : ""}" style="--marker:${markerColor}"><svg viewBox="0 0 40 50" aria-hidden="true"><path d="M20 1.5C9.8 1.5 1.5 9.8 1.5 20c0 13.8 18.5 28.5 18.5 28.5S38.5 33.8 38.5 20C38.5 9.8 30.2 1.5 20 1.5Z" fill="var(--marker)" stroke="white" stroke-width="3"/><circle cx="20" cy="20" r="7" fill="white"/></svg></button>`,
+        html: `<button aria-label="${markerLabel}" class="flood-marker ${report.id === selectedId ? "is-selected" : ""}" style="--marker:${markerColor}"><svg viewBox="0 0 40 50" aria-hidden="true"><path d="M20 1.5C9.8 1.5 1.5 9.8 1.5 20c0 13.8 18.5 28.5 18.5 28.5S38.5 33.8 38.5 20C38.5 9.8 30.2 1.5 20 1.5Z" fill="var(--marker)" stroke="white" stroke-width="3"/><circle cx="20" cy="20" r="7" fill="white"/></svg></button>`,
         iconSize: [40, 50], iconAnchor: [20, 49],
       });
       L.marker([report.latitude, report.longitude], { icon }).addTo(layer).on("click", () => onSelect(report.id));

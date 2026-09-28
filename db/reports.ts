@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 
 type Severity = "low" | "medium" | "high";
-type ReportType = "flood" | "help";
+type ReportType = "flood" | "help" | "water_receded" | "route_open";
 
 function database() {
   if (!env.DB) throw new Error("Database binding is unavailable");
