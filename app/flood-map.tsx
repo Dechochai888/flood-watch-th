@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CloudRain, Loader2, Pause, Play } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import type { FloodReport } from "./flood-app";
 
@@ -17,16 +18,15 @@ const layers = {
 };
 
 export type MapStyle = keyof typeof layers;
-export type RainRadarStatus = { state: "off" | "loading" | "ready" | "error"; time?: number; message?: string };
+type RainFrame = { time: number; path: string };
 
-export function FloodMap({ reports, position, locationReady, selectedId, mapStyle, rainEnabled, onRainStatusChange, onSelect, onPickLocation }: {
+export function FloodMap({ reports, position, locationReady, selectedId, mapStyle, rainEnabled, onSelect, onPickLocation }: {
   reports: FloodReport[];
   position: [number, number];
   locationReady: boolean;
   selectedId: string | null;
   mapStyle: MapStyle;
   rainEnabled: boolean;
-  onRainStatusChange: (status: RainRadarStatus) => void;
   onSelect: (id: string) => void;
   onPickLocation: (lat: number, lng: number) => void;
 }) {
@@ -38,12 +38,17 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
   const pickerRef = useRef<import("leaflet").Marker | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const onPickLocationRef = useRef(onPickLocation);
-  const onRainStatusChangeRef = useRef(onRainStatusChange);
   const initialPositionRef = useRef(position);
   const [mapReady, setMapReady] = useState(false);
+  const [rainStatus, setRainStatus] = useState<{ state: "off" | "loading" | "ready" | "error"; message?: string }>({ state: "off" });
+  const [radarHost, setRadarHost] = useState("");
+  const [radarFrames, setRadarFrames] = useState<RainFrame[]>([]);
+  const [radarFrameIndex, setRadarFrameIndex] = useState(0);
+  const [radarPlaying, setRadarPlaying] = useState(false);
+  const activeRadarFrame = radarFrames[radarFrameIndex];
+  const radarTimeFormatter = useMemo(() => new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }), []);
 
   useEffect(() => { onPickLocationRef.current = onPickLocation; }, [onPickLocation]);
-  useEffect(() => { onRainStatusChangeRef.current = onRainStatusChange; }, [onRainStatusChange]);
 
   useEffect(() => {
     let mounted = true;
@@ -76,36 +81,23 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
     if (!L || !map || !mapReady) return;
     let cancelled = false;
 
-    if (!rainEnabled) {
-      radarLayerRef.current?.remove();
-      radarLayerRef.current = null;
-      onRainStatusChangeRef.current({ state: "off" });
-      return;
-    }
+    if (!rainEnabled) return;
 
     async function loadLatestRadar() {
-      if (!radarLayerRef.current) onRainStatusChangeRef.current({ state: "loading" });
+      setRainStatus((current) => current.state === "ready" ? current : { state: "loading" });
       try {
         const response = await fetch("https://api.rainviewer.com/public/weather-maps.json", { cache: "no-store" });
         if (!response.ok) throw new Error("โหลดข้อมูลเรดาร์ไม่ได้");
         const data = await response.json() as { host?: string; radar?: { past?: { time: number; path: string }[] } };
         const frames = data.radar?.past ?? [];
-        const latest = frames.at(-1);
-        if (!data.host || !latest) throw new Error("ยังไม่มีข้อมูลเรดาร์ในขณะนี้");
+        if (!data.host || !frames.length) throw new Error("ยังไม่มีข้อมูลเรดาร์ในขณะนี้");
         if (cancelled) return;
-        const tileUrl = `${data.host}${latest.path}/256/{z}/{x}/{y}/2/1_0.png`;
-        const nextLayer = L.tileLayer(tileUrl, {
-          opacity: 0.68,
-          maxNativeZoom: 7,
-          maxZoom: 19,
-          zIndex: 250,
-          attribution: 'ข้อมูลเรดาร์ฝน © <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>',
-        }).addTo(map);
-        radarLayerRef.current?.remove();
-        radarLayerRef.current = nextLayer;
-        onRainStatusChangeRef.current({ state: "ready", time: latest.time });
+        setRadarHost(data.host);
+        setRadarFrames(frames);
+        setRadarFrameIndex(frames.length - 1);
+        setRainStatus({ state: "ready" });
       } catch (error) {
-        if (!cancelled) onRainStatusChangeRef.current({ state: "error", message: error instanceof Error ? error.message : "โหลดข้อมูลเรดาร์ไม่ได้" });
+        if (!cancelled) setRainStatus({ state: "error", message: error instanceof Error ? error.message : "โหลดข้อมูลเรดาร์ไม่ได้" });
       }
     }
 
@@ -113,6 +105,33 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
     const refreshTimer = window.setInterval(() => void loadLatestRadar(), 5 * 60_000);
     return () => { cancelled = true; window.clearInterval(refreshTimer); };
   }, [rainEnabled, mapReady]);
+
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    if (!L || !map || !mapReady) return;
+    radarLayerRef.current?.remove();
+    radarLayerRef.current = null;
+    if (!rainEnabled || !radarHost || !activeRadarFrame) return;
+    radarLayerRef.current = L.tileLayer(`${radarHost}${activeRadarFrame.path}/256/{z}/{x}/{y}/2/1_0.png`, {
+      opacity: 0.68,
+      maxNativeZoom: 7,
+      maxZoom: 19,
+      zIndex: 250,
+      attribution: 'ข้อมูลเรดาร์ฝน © <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>',
+    }).addTo(map);
+  }, [activeRadarFrame, radarHost, rainEnabled, mapReady]);
+
+  useEffect(() => {
+    if (!rainEnabled || !radarPlaying || radarFrames.length < 2) return;
+    const playbackTimer = window.setInterval(() => {
+      setRadarFrameIndex((current) => {
+        if (current >= radarFrames.length - 1) { setRadarPlaying(false); return current; }
+        return current + 1;
+      });
+    }, 900);
+    return () => window.clearInterval(playbackTimer);
+  }, [rainEnabled, radarPlaying, radarFrames.length]);
 
   useEffect(() => {
     const L = leafletRef.current;
@@ -151,5 +170,20 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
     else pickerRef.current.setLatLng(position);
   }, [position, locationReady, mapReady]);
 
-  return <div ref={containerRef} className="h-full min-h-[60dvh] w-full bg-[#dcebee] lg:min-h-[calc(100vh-80px)]" aria-label="แผนที่จุดน้ำท่วมและขอความช่วยเหลือ" />;
+  return <>
+    <div ref={containerRef} className="h-full min-h-[60dvh] w-full bg-[#dcebee] lg:min-h-[calc(100vh-80px)]" aria-label="แผนที่จุดน้ำท่วมและขอความช่วยเหลือ" />
+    {rainEnabled && <div className="pointer-events-auto absolute right-3 top-[8.25rem] z-[500] w-[min(16rem,calc(100%-1.5rem))] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur sm:right-5 sm:top-[8.75rem]">
+      <div className="flex items-center gap-2"><CloudRain className="h-4 w-4 shrink-0 text-[#2563eb]" /><p className="text-xs font-extrabold text-[#1646a0]">เรดาร์ฝนย้อนหลัง 2 ชั่วโมง</p></div>
+      {rainStatus.state === "loading" && <p className="mt-2 flex items-center gap-2 text-[11px] text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" />กำลังโหลดข้อมูลฝน...</p>}
+      {rainStatus.state === "error" && <p className="mt-2 text-[11px] font-semibold text-rose-600">{rainStatus.message || "ยังโหลดข้อมูลเรดาร์ไม่ได้"}</p>}
+      {rainStatus.state === "ready" && activeRadarFrame && <>
+        <div className="mt-2 flex items-center justify-between gap-2"><button type="button" onClick={() => { if (radarPlaying) setRadarPlaying(false); else { if (radarFrameIndex >= radarFrames.length - 1) setRadarFrameIndex(0); setRadarPlaying(true); } }} className="flex min-h-9 items-center gap-1.5 rounded-lg bg-[#2563eb] px-3 text-[11px] font-extrabold text-white">{radarPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}{radarPlaying ? "หยุด" : "เล่นภาพฝน"}</button><p className="text-[11px] font-bold text-slate-600">{radarTimeFormatter.format(new Date(activeRadarFrame.time * 1000))} น.</p></div>
+        <input aria-label="เลือกเวลาเรดาร์ฝน" type="range" min={0} max={Math.max(0, radarFrames.length - 1)} value={radarFrameIndex} onChange={(event) => { setRadarPlaying(false); setRadarFrameIndex(Number(event.target.value)); }} className="mt-2 w-full accent-[#2563eb]" />
+        <div className="flex justify-between text-[9px] text-slate-400"><span>2 ชม.ก่อน</span><span>ปัจจุบัน</span></div>
+      </>}
+      <div className="mt-2 h-2 rounded-full bg-gradient-to-r from-[#88ddee] via-[#005588] via-60% to-[#ff4400]" />
+      <div className="mt-1 flex justify-between text-[9px] text-slate-400"><span>ฝนเบา</span><span>ฝนหนัก</span></div>
+      <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer" className="mt-1 block text-[9px] font-semibold text-slate-400 underline">ข้อมูลเรดาร์โดย RainViewer</a>
+    </div>}
+  </>;
 }
