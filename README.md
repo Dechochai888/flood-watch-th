@@ -45,17 +45,3 @@ npm run db:generate
 npm run build
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_nice_guardian.sql
 ```
-
-## การแก้ไขในอนาคต
-
-ข้อกำหนดสำหรับผู้พัฒนาและ AI agent อยู่ใน [`AGENTS.md`](./AGENTS.md) ทุกการเปลี่ยนแปลงควรทำผ่านสาขาใหม่และ Pull Request พร้อมให้ GitHub Actions ตรวจว่าโปรเจกต์ Build ผ่านก่อนรวมเข้า `main`
-
-## โครงสร้างสำคัญ
-
-```text
-app/                 หน้าเว็บ แผนที่ และ API
-db/                  การเข้าถึงข้อมูลและโครงสร้างฐานข้อมูล
-drizzle/             Database migrations
-components/ui/       ส่วนประกอบหน้าจอ
-.github/workflows/   การตรวจสอบอัตโนมัติบน GitHub
-```
