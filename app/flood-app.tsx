@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Crosshair, Droplets, HandHelping, ImagePlus, Layers3, ListFilter, Loader2, LocateFixed, Map as MapIcon, Navigation, Plus, RefreshCw, Satellite, ShieldCheck, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, CloudRain, Crosshair, Droplets, HandHelping, ImagePlus, Layers3, ListFilter, Loader2, LocateFixed, Map as MapIcon, Navigation, Plus, RefreshCw, Satellite, ShieldCheck, Trash2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { FloodMap, type MapStyle } from "./flood-map";
+import { FloodMap, type MapStyle, type RainRadarStatus } from "./flood-map";
 
 export type Severity = "low" | "medium" | "high";
 export type ReportType = "flood" | "help";
@@ -55,6 +55,8 @@ export function FloodApp() {
   const [locating, setLocating] = useState(false);
   const [locationReady, setLocationReady] = useState(false);
   const [mapStyle, setMapStyle] = useState<MapStyle>("street");
+  const [rainEnabled, setRainEnabled] = useState(false);
+  const [rainStatus, setRainStatus] = useState<RainRadarStatus>({ state: "off" });
   const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<FloodReport | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -153,7 +155,7 @@ export function FloodApp() {
 
       <section className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] min-h-[calc(100vh-80px)] lg:grid-cols-[minmax(0,1fr)_400px]">
         <div ref={mapSectionRef} className="relative w-full min-w-0 max-w-full min-h-[60dvh] scroll-mt-0 overflow-hidden border-b border-slate-200 lg:min-h-0 lg:border-b-0 lg:border-r">
-          <FloodMap reports={visibleReports} position={position} locationReady={locationReady} selectedId={selectedId} mapStyle={mapStyle} onSelect={setSelectedId} onPickLocation={(lat, lng) => { setPosition([lat, lng]); setLocationReady(true); setSelectedId(null); }} />
+          <FloodMap reports={visibleReports} position={position} locationReady={locationReady} selectedId={selectedId} mapStyle={mapStyle} rainEnabled={rainEnabled} onRainStatusChange={setRainStatus} onSelect={setSelectedId} onPickLocation={(lat, lng) => { setPosition([lat, lng]); setLocationReady(true); setSelectedId(null); }} />
           <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] p-3 sm:p-5">
             <div className="flex items-start justify-between gap-2">
               <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/80 bg-white/95 p-2 shadow-xl shadow-slate-900/10 backdrop-blur sm:max-w-md">
@@ -163,9 +165,20 @@ export function FloodApp() {
               <div className="pointer-events-auto flex rounded-xl border border-white/80 bg-white/95 p-1 shadow-xl">
                 <button aria-label="แผนที่ถนน" onClick={() => setMapStyle("street")} className={`grid h-9 w-9 place-items-center rounded-lg ${mapStyle === "street" ? "bg-[#073b4c] text-white" : "text-slate-500"}`}><MapIcon className="h-4 w-4" /></button>
                 <button aria-label="แผนที่ดาวเทียม" onClick={() => setMapStyle("satellite")} className={`grid h-9 w-9 place-items-center rounded-lg ${mapStyle === "satellite" ? "bg-[#073b4c] text-white" : "text-slate-500"}`}><Satellite className="h-4 w-4" /></button>
+                <button aria-label={rainEnabled ? "ปิดเรดาร์ฝน" : "เปิดเรดาร์ฝน"} title="เรดาร์ฝน" onClick={() => setRainEnabled((enabled) => !enabled)} className={`grid h-9 w-9 place-items-center rounded-lg ${rainEnabled ? "bg-[#2563eb] text-white" : "text-slate-500"}`}>{rainStatus.state === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudRain className="h-4 w-4" />}</button>
               </div>
             </div>
           </div>
+
+          {rainEnabled && <div className="pointer-events-auto absolute right-3 top-[5.25rem] z-[500] w-[min(13rem,calc(100%-1.5rem))] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur sm:right-5 sm:top-[5.75rem]">
+            <div className="flex items-center gap-2"><CloudRain className="h-4 w-4 shrink-0 text-[#2563eb]" /><p className="text-xs font-extrabold text-[#1646a0]">เรดาร์ฝนล่าสุด</p></div>
+            {rainStatus.state === "loading" && <p className="mt-1.5 text-[11px] text-slate-500">กำลังโหลดข้อมูลฝน...</p>}
+            {rainStatus.state === "ready" && <p className="mt-1.5 text-[11px] text-slate-500">ข้อมูลเวลา {new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date((rainStatus.time ?? 0) * 1000))} น.</p>}
+            {rainStatus.state === "error" && <p className="mt-1.5 text-[11px] font-semibold text-rose-600">{rainStatus.message || "ยังโหลดข้อมูลเรดาร์ไม่ได้"}</p>}
+            <div className="mt-2 h-2 rounded-full bg-gradient-to-r from-[#88ddee] via-[#005588] via-60% to-[#ff4400]" />
+            <div className="mt-1 flex justify-between text-[9px] text-slate-400"><span>ฝนเบา</span><span>ฝนหนัก</span></div>
+            <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer" className="mt-1 block text-[9px] font-semibold text-slate-400 underline">ข้อมูลเรดาร์โดย RainViewer</a>
+          </div>}
 
           {locationReady && <div className="absolute inset-x-3 bottom-5 z-[550] mx-auto w-auto max-w-md rounded-2xl border border-white/80 bg-white/95 p-2 shadow-2xl backdrop-blur">
             <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:items-center"><div className="hidden min-w-0 flex-1 px-2 sm:block"><p className="text-xs font-bold text-[#087e72]">เลือกตำแหน่งแล้ว</p><p className="truncate text-[11px] text-slate-500">{position[0].toFixed(5)}, {position[1].toFixed(5)}</p></div><button onClick={() => openForm("help")} className="h-11 min-w-0 rounded-xl bg-[#eaf1ff] px-1.5 text-[11px] font-extrabold text-[#1d4ed8] sm:flex-1 sm:px-2 sm:text-sm">ขอความช่วยเหลือที่นี่</button><button onClick={() => openForm("flood")} className="h-11 min-w-0 rounded-xl bg-[#ff7a3d] px-1.5 text-[11px] font-extrabold text-white sm:flex-1 sm:px-2 sm:text-sm">แจ้งน้ำท่วมที่นี่</button></div>

@@ -17,13 +17,16 @@ const layers = {
 };
 
 export type MapStyle = keyof typeof layers;
+export type RainRadarStatus = { state: "off" | "loading" | "ready" | "error"; time?: number; message?: string };
 
-export function FloodMap({ reports, position, locationReady, selectedId, mapStyle, onSelect, onPickLocation }: {
+export function FloodMap({ reports, position, locationReady, selectedId, mapStyle, rainEnabled, onRainStatusChange, onSelect, onPickLocation }: {
   reports: FloodReport[];
   position: [number, number];
   locationReady: boolean;
   selectedId: string | null;
   mapStyle: MapStyle;
+  rainEnabled: boolean;
+  onRainStatusChange: (status: RainRadarStatus) => void;
   onSelect: (id: string) => void;
   onPickLocation: (lat: number, lng: number) => void;
 }) {
@@ -31,13 +34,16 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const markerLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const baseLayerRef = useRef<import("leaflet").TileLayer | null>(null);
+  const radarLayerRef = useRef<import("leaflet").TileLayer | null>(null);
   const pickerRef = useRef<import("leaflet").Marker | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const onPickLocationRef = useRef(onPickLocation);
+  const onRainStatusChangeRef = useRef(onRainStatusChange);
   const initialPositionRef = useRef(position);
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => { onPickLocationRef.current = onPickLocation; }, [onPickLocation]);
+  useEffect(() => { onRainStatusChangeRef.current = onRainStatusChange; }, [onRainStatusChange]);
 
   useEffect(() => {
     let mounted = true;
@@ -63,6 +69,50 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
     baseLayerRef.current = L.tileLayer(layers[mapStyle].url, layers[mapStyle].options).addTo(map);
     baseLayerRef.current.bringToBack();
   }, [mapStyle, mapReady]);
+
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    if (!L || !map || !mapReady) return;
+    let cancelled = false;
+
+    if (!rainEnabled) {
+      radarLayerRef.current?.remove();
+      radarLayerRef.current = null;
+      onRainStatusChangeRef.current({ state: "off" });
+      return;
+    }
+
+    async function loadLatestRadar() {
+      if (!radarLayerRef.current) onRainStatusChangeRef.current({ state: "loading" });
+      try {
+        const response = await fetch("https://api.rainviewer.com/public/weather-maps.json", { cache: "no-store" });
+        if (!response.ok) throw new Error("โหลดข้อมูลเรดาร์ไม่ได้");
+        const data = await response.json() as { host?: string; radar?: { past?: { time: number; path: string }[] } };
+        const frames = data.radar?.past ?? [];
+        const latest = frames.at(-1);
+        if (!data.host || !latest) throw new Error("ยังไม่มีข้อมูลเรดาร์ในขณะนี้");
+        if (cancelled) return;
+        const tileUrl = `${data.host}${latest.path}/256/{z}/{x}/{y}/2/1_0.png`;
+        const nextLayer = L.tileLayer(tileUrl, {
+          opacity: 0.68,
+          maxNativeZoom: 7,
+          maxZoom: 19,
+          zIndex: 250,
+          attribution: 'ข้อมูลเรดาร์ฝน © <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>',
+        }).addTo(map);
+        radarLayerRef.current?.remove();
+        radarLayerRef.current = nextLayer;
+        onRainStatusChangeRef.current({ state: "ready", time: latest.time });
+      } catch (error) {
+        if (!cancelled) onRainStatusChangeRef.current({ state: "error", message: error instanceof Error ? error.message : "โหลดข้อมูลเรดาร์ไม่ได้" });
+      }
+    }
+
+    void loadLatestRadar();
+    const refreshTimer = window.setInterval(() => void loadLatestRadar(), 5 * 60_000);
+    return () => { cancelled = true; window.clearInterval(refreshTimer); };
+  }, [rainEnabled, mapReady]);
 
   useEffect(() => {
     const L = leafletRef.current;
