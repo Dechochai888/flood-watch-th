@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, CloudRain, Crosshair, Droplets, HandHelping, ImagePlus, Layers3, ListFilter, Loader2, LocateFixed, Map as MapIcon, Navigation, Plus, RefreshCw, Route, Satellite, ShieldCheck, Trash2, TrendingDown, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, CloudRain, Crosshair, Droplets, HandHelping, ImagePlus, Layers3, ListFilter, Loader2, LocateFixed, Map as MapIcon, Navigation, Plus, RefreshCw, Route, Satellite, Save, ShieldCheck, Trash2, TrendingDown, Undo2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Toaster } from "@/components/ui/sonner";
@@ -15,8 +15,10 @@ export type FloodReport = {
   description: string; areaName: string; imageUrl: string | null; imageUrls: string[]; createdAt: number;
   reportType: ReportType; contactName: string; contactPhone: string; helpNeeds: string;
 };
+export type SafeRoute = { id: string; name: string; description: string; path: [number, number][]; createdAt: number };
 
 const TOKEN_KEY = "flood-watch-delete-tokens";
+const ROUTE_TOKEN_KEY = "flood-watch-route-delete-tokens";
 const severityMeta: Record<Severity, { label: string; color: string; soft: string; ring: string }> = {
   low: { label: "เฝ้าระวัง", color: "#ca8a04", soft: "#fef9c3", ring: "ring-yellow-500/20" },
   medium: { label: "ควรหลีกเลี่ยง", color: "#ea580c", soft: "#ffedd5", ring: "ring-orange-500/20" },
@@ -49,13 +51,23 @@ function saveToken(id: string, token: string) {
   const tokens = readTokens(); tokens[id] = token; localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
 }
 
+function saveRouteToken(id: string, token: string) {
+  if (typeof window === "undefined") return;
+  let tokens: Record<string, string> = {};
+  try { tokens = JSON.parse(localStorage.getItem(ROUTE_TOKEN_KEY) || "{}"); } catch { tokens = {}; }
+  tokens[id] = token;
+  localStorage.setItem(ROUTE_TOKEN_KEY, JSON.stringify(tokens));
+}
+
 function removeToken(id: string) {
   const tokens = readTokens(); delete tokens[id]; localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
 }
 
 export function FloodApp() {
   const [reports, setReports] = useState<FloodReport[]>([]);
+  const [safeRoutes, setSafeRoutes] = useState<SafeRoute[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
   const [formType, setFormType] = useState<ReportType>("flood");
@@ -65,6 +77,10 @@ export function FloodApp() {
   const [locationReady, setLocationReady] = useState(false);
   const [mapStyle, setMapStyle] = useState<MapStyle>("street");
   const [rainEnabled, setRainEnabled] = useState(false);
+  const [routeDrawing, setRouteDrawing] = useState(false);
+  const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
+  const [routeListOpen, setRouteListOpen] = useState(false);
+  const [routeSaveOpen, setRouteSaveOpen] = useState(false);
   const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<FloodReport | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -83,10 +99,24 @@ export function FloodApp() {
     finally { setLoading(false); }
   }, []);
 
+  const loadSafeRoutes = useCallback(async () => {
+    try {
+      const response = await fetch("/api/safe-routes", { cache: "no-store" });
+      if (!response.ok) throw new Error();
+      const data = await response.json() as { routes: SafeRoute[] };
+      setSafeRoutes(data.routes);
+    } catch { toast.error("ยังโหลดเส้นทางปลอดน้ำท่วมไม่ได้"); }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => void loadReports(), 0);
     return () => window.clearTimeout(timer);
   }, [loadReports]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadSafeRoutes(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadSafeRoutes]);
 
   const openForm = useCallback((type: ReportType) => { setFormType(type); setReportOpen(true); }, []);
 
@@ -116,8 +146,15 @@ export function FloodApp() {
     return report.reportType === "flood" && report.severity === filter;
   }), [filter, reports]);
   const selectedReport = reports.find((report) => report.id === selectedId) ?? null;
+  const selectedRoute = safeRoutes.find((route) => route.id === selectedRouteId) ?? null;
   const highCount = reports.filter((report) => report.reportType === "flood" && report.severity === "high").length;
   const helpCount = reports.filter((report) => report.reportType === "help").length;
+
+  const startRouteDrawing = useCallback(() => {
+    setSelectedId(null); setSelectedRouteId(null); setRoutePoints([]); setRouteDrawing(true); setRouteListOpen(false);
+    window.requestAnimationFrame(() => mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    toast.info("แตะตามแนวถนนเพื่อวาดเส้นทาง อย่างน้อย 2 จุด");
+  }, []);
 
   const useMyLocation = useCallback(() => {
     if (!navigator.geolocation) return toast.error("อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง");
@@ -165,7 +202,7 @@ export function FloodApp() {
 
       <section className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] min-h-[calc(100vh-80px)] lg:grid-cols-[minmax(0,1fr)_400px]">
         <div ref={mapSectionRef} className="relative w-full min-w-0 max-w-full min-h-[60dvh] scroll-mt-0 overflow-hidden border-b border-slate-200 lg:min-h-0 lg:border-b-0 lg:border-r">
-          <FloodMap reports={visibleReports} position={position} locationReady={locationReady} selectedId={selectedId} mapStyle={mapStyle} rainEnabled={rainEnabled} onSelect={setSelectedId} onPickLocation={(lat, lng) => { setPosition([lat, lng]); setLocationReady(true); setSelectedId(null); }} />
+          <FloodMap reports={visibleReports} safeRoutes={safeRoutes} routePoints={routePoints} routeDrawing={routeDrawing} position={position} locationReady={locationReady} selectedId={selectedId} selectedRouteId={selectedRouteId} mapStyle={mapStyle} rainEnabled={rainEnabled} onSelect={(id) => { setSelectedRouteId(null); setSelectedId(id); }} onSelectRoute={(id) => { setSelectedId(null); setSelectedRouteId(id); }} onPickLocation={(lat, lng) => { setPosition([lat, lng]); setLocationReady(true); setSelectedId(null); setSelectedRouteId(null); }} onAddRoutePoint={(lat, lng) => setRoutePoints((points) => points.length >= 200 ? points : [...points, [lat, lng]])} />
           <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] p-3 sm:p-5">
             <div className="flex items-start justify-between gap-2">
               <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/80 bg-white/95 p-2 shadow-xl shadow-slate-900/10 backdrop-blur sm:max-w-md">
@@ -180,17 +217,19 @@ export function FloodApp() {
           </div>
 
 
-          {locationReady && <div className="absolute inset-x-3 bottom-5 z-[550] mx-auto w-auto max-w-md rounded-2xl border border-white/80 bg-white/95 p-2 shadow-2xl backdrop-blur">
+          {routeDrawing ? <div className="absolute inset-x-3 bottom-5 z-[550] mx-auto w-auto max-w-lg rounded-2xl border border-cyan-100 bg-white/95 p-3 shadow-2xl backdrop-blur"><div className="flex items-center justify-between gap-2"><div><p className="text-sm font-extrabold text-cyan-800">กำลังวาดเส้นทางปลอดน้ำท่วม</p><p className="text-[11px] text-slate-500">แตะตามแนวถนน · {routePoints.length} จุด</p></div><button type="button" disabled={!routePoints.length} onClick={() => setRoutePoints((points) => points.slice(0, -1))} className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-600 disabled:opacity-40" aria-label="ย้อนกลับหนึ่งจุด"><Undo2 className="h-4 w-4" /></button></div><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => { setRouteDrawing(false); setRoutePoints([]); }} className="h-11 rounded-xl border border-slate-200 bg-white text-sm font-extrabold text-slate-600">ยกเลิก</button><button type="button" disabled={routePoints.length < 2} onClick={() => setRouteSaveOpen(true)} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0891b2] text-sm font-extrabold text-white disabled:opacity-40"><Save className="h-4 w-4" />บันทึกเส้นทาง</button></div></div> : locationReady && <div className="absolute inset-x-3 bottom-5 z-[550] mx-auto w-auto max-w-md rounded-2xl border border-white/80 bg-white/95 p-2 shadow-2xl backdrop-blur">
             <div className="min-w-0"><div className="hidden px-2 pb-2 sm:block"><p className="text-xs font-bold text-[#087e72]">เลือกตำแหน่งแล้ว · {position[0].toFixed(5)}, {position[1].toFixed(5)}</p></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><button onClick={() => openForm("help")} className="h-11 min-w-0 rounded-xl bg-[#eaf1ff] px-1.5 text-[11px] font-extrabold text-[#1d4ed8]">ขอความช่วยเหลือ</button><button onClick={() => openForm("flood")} className="h-11 min-w-0 rounded-xl bg-[#ff7a3d] px-1.5 text-[11px] font-extrabold text-white">แจ้งน้ำท่วม</button><button onClick={() => openForm("water_receded")} className="h-11 min-w-0 rounded-xl bg-green-100 px-1.5 text-[11px] font-extrabold text-green-800">น้ำลดแล้ว</button><button onClick={() => openForm("route_open")} className="h-11 min-w-0 rounded-xl bg-cyan-100 px-1.5 text-[11px] font-extrabold text-cyan-800">เส้นทางผ่านได้</button></div></div>
           </div>}
 
           {!locationReady && <div className="absolute bottom-5 left-4 z-[500] flex items-center gap-3 rounded-2xl border border-white/80 bg-white/95 px-4 py-3 shadow-xl"><Layers3 className="h-5 w-5 text-[#087e72]" /><div><p className="text-sm font-extrabold">{reports.length} รายการ</p><p className="text-[11px] text-slate-500">อันตราย {highCount} · ขอความช่วยเหลือ {helpCount}</p></div></div>}
-          {selectedReport && <ReportPopup report={selectedReport} canDelete={ownedIds.has(selectedReport.id)} onViewImages={(urls, index) => setImageViewer({ urls, index })} onDelete={() => setDeleteTarget(selectedReport)} onClose={() => setSelectedId(null)} />}
+          {!routeDrawing && selectedReport && <ReportPopup report={selectedReport} canDelete={ownedIds.has(selectedReport.id)} onViewImages={(urls, index) => setImageViewer({ urls, index })} onDelete={() => setDeleteTarget(selectedReport)} onClose={() => setSelectedId(null)} />}
+          {!routeDrawing && selectedRoute && <SafeRoutePopup route={selectedRoute} onClose={() => setSelectedRouteId(null)} />}
         </div>
 
         <aside className="flex w-full min-w-0 max-w-full min-h-[40dvh] flex-col overflow-hidden bg-white lg:h-[calc(100vh-80px)]">
           <div className="min-w-0 border-b border-slate-100 px-4 pb-4 pt-5 sm:px-5">
             <div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#0a8d80]">สถานการณ์ล่าสุด</p><h2 className="mt-1 text-xl font-extrabold">รายงานจากพื้นที่</h2></div><button aria-label="โหลดข้อมูลใหม่" onClick={() => void loadReports()} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-500"><RefreshCw className="h-4 w-4" /></button></div>
+            <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={startRouteDrawing} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#0891b2] px-2 text-xs font-extrabold text-white"><Route className="h-4 w-4" />บันทึกเส้นทาง</button><button type="button" onClick={() => setRouteListOpen(true)} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-2 text-xs font-extrabold text-cyan-800"><MapIcon className="h-4 w-4" />ดูเส้นทาง ({safeRoutes.length})</button></div>
             <div className="mt-4 flex gap-2 overflow-x-auto pb-1 scrollbar-none"><FilterButton active={filter === "all"} onClick={() => setFilter("all")}><ListFilter className="h-4 w-4" />ทั้งหมด</FilterButton><FilterButton active={filter === "flood"} onClick={() => setFilter("flood")} dot="#f97316">น้ำท่วม</FilterButton><FilterButton active={filter === "help"} onClick={() => setFilter("help")} dot="#2563eb">ขอความช่วยเหลือ</FilterButton><FilterButton active={filter === "water_receded"} onClick={() => setFilter("water_receded")} dot="#16a34a">น้ำลดแล้ว</FilterButton><FilterButton active={filter === "route_open"} onClick={() => setFilter("route_open")} dot="#0891b2">เส้นทางผ่านได้</FilterButton>{(Object.keys(severityMeta) as Severity[]).map((key) => <FilterButton key={key} active={filter === key} onClick={() => setFilter(key)} dot={severityMeta[key].color}>{severityMeta[key].label}</FilterButton>)}</div>
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4">
@@ -201,6 +240,8 @@ export function FloodApp() {
       </section>
 
       <ReportDialog open={reportOpen} reportType={formType} onOpenChange={setReportOpen} position={position} onPositionChange={(lat, lng) => { setPosition([lat, lng]); setLocationReady(true); }} locating={locating} onUseCurrentLocation={useMyLocation} onChooseOnMap={() => { setReportOpen(false); window.requestAnimationFrame(() => mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })); toast.info("แตะแผนที่ตรงตำแหน่งจริง แล้วเลือกประเภทรายงานที่ต้องการ"); }} onSuccess={async (id, token) => { saveToken(id, token); await loadReports(); setReportOpen(false); }} />
+      <RouteSaveDialog open={routeSaveOpen} path={routePoints} onOpenChange={setRouteSaveOpen} onSuccess={async (route, token) => { saveRouteToken(route.id, token); await loadSafeRoutes(); setRouteSaveOpen(false); setRouteDrawing(false); setRoutePoints([]); setSelectedRouteId(route.id); toast.success("บันทึกเส้นทางปลอดน้ำท่วมแล้ว"); }} />
+      <RouteListDialog open={routeListOpen} routes={safeRoutes} onOpenChange={setRouteListOpen} onCreate={startRouteDrawing} onSelect={(id) => { setSelectedId(null); setSelectedRouteId(id); setRouteListOpen(false); window.requestAnimationFrame(() => mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} />
       <ImageViewer viewer={imageViewer} onChange={setImageViewer} />
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>ลบตำแหน่งนี้หรือไม่?</AlertDialogTitle><AlertDialogDescription>รายการและรูปภาพจะถูกลบถาวร เฉพาะเครื่องที่สร้างรายการเท่านั้นที่มีสิทธิ์ลบ</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleting}>ยกเลิก</AlertDialogCancel><AlertDialogAction disabled={deleting} onClick={(event) => { event.preventDefault(); void confirmDelete(); }} className="bg-rose-600 text-white hover:bg-rose-700">{deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}ลบรายการ</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <Toaster richColors position="top-center" />
@@ -252,6 +293,51 @@ function ReportPopup({ report, canDelete, onViewImages, onDelete, onClose }: { r
     <button onClick={onClose} aria-label="ปิดรายละเอียด" className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-slate-900/75 text-white"><X className="h-4 w-4" /></button>
     <div className="max-h-[calc(60dvh-7rem)] overflow-y-auto p-4"><div className="flex min-w-0 items-center justify-between gap-2"><span className="shrink-0 rounded-full px-3 py-1 text-xs font-bold" style={{ color: meta.color, background: meta.soft }}>{meta.label}</span><span className="truncate text-xs text-slate-400">{timeAgo(report.createdAt)}</span></div><h3 className="mt-3 break-words font-extrabold">{report.areaName || "ตำแหน่งที่แจ้ง"}</h3><p className="mt-1 break-words text-sm leading-6 text-slate-600">{report.description}</p>{report.reportType === "help" ? <div className="mt-3 space-y-3 break-words rounded-xl bg-blue-50 px-3 py-3 text-sm text-blue-900"><div><p><strong>ต้องการ:</strong> {report.helpNeeds}</p><p className="mt-1"><strong>ติดต่อ:</strong> {report.contactName ? `${report.contactName} · ` : ""}<a className="font-bold underline" href={`tel:${report.contactPhone}`}>{report.contactPhone}</a></p></div><a href={googleMapsDirectionsUrl(report)} target="_blank" rel="noopener noreferrer" className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2563eb] px-4 py-2.5 font-extrabold text-white shadow-sm"><Navigation className="h-4 w-4" />นำทางไปจุดนี้ด้วย Google Maps</a></div> : report.reportType === "flood" ? <div className="mt-3 flex min-w-0 items-center justify-between gap-2 rounded-xl bg-[#eef8f8] px-3 py-2 text-sm"><span className="min-w-0 text-slate-500">ระดับน้ำโดยประมาณ</span><strong className="shrink-0 text-[#087e72]">{report.waterDepth} ซม.</strong></div> : <a href={googleMapsDirectionsUrl(report)} target="_blank" rel="noopener noreferrer" className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold text-white shadow-sm" style={{ background: meta.color }}><Navigation className="h-4 w-4" />เปิดจุดนี้ใน Google Maps</a>}{canDelete && <button onClick={onDelete} className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-rose-600"><Trash2 className="h-4 w-4" />ลบตำแหน่งนี้</button>}</div>
   </div>;
+}
+
+function routeDistanceKm(path: [number, number][]) {
+  const earthRadius = 6371;
+  return path.slice(1).reduce((total, point, index) => {
+    const previous = path[index];
+    const lat1 = previous[0] * Math.PI / 180; const lat2 = point[0] * Math.PI / 180;
+    const deltaLat = (point[0] - previous[0]) * Math.PI / 180; const deltaLng = (point[1] - previous[1]) * Math.PI / 180;
+    const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+    return total + earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }, 0);
+}
+
+function googleMapsSafeRouteUrl(route: SafeRoute) {
+  const origin = route.path[0]; const destination = route.path.at(-1);
+  if (!origin || !destination) return "https://www.google.com/maps";
+  const middle = route.path.slice(1, -1);
+  const step = Math.max(1, Math.ceil(middle.length / 8));
+  const waypoints = middle.filter((_, index) => index % step === 0).slice(0, 8).map((point) => `${point[0]},${point[1]}`).join("|");
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(`${origin[0]},${origin[1]}`)}&destination=${encodeURIComponent(`${destination[0]},${destination[1]}`)}${waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ""}&travelmode=driving`;
+}
+
+function SafeRoutePopup({ route, onClose }: { route: SafeRoute; onClose: () => void }) {
+  return <div className="absolute inset-x-3 bottom-24 z-[600] mx-auto w-auto max-w-sm rounded-2xl border border-green-100 bg-white p-4 shadow-2xl sm:left-auto sm:right-5 sm:w-[min(24rem,calc(100%-2.5rem))]"><button onClick={onClose} aria-label="ปิดรายละเอียดเส้นทาง" className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-slate-900/75 text-white"><X className="h-4 w-4" /></button><div className="flex items-center gap-2 text-green-700"><Route className="h-5 w-5" /><span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-extrabold">เส้นทางปลอดน้ำท่วม</span></div><h3 className="mt-3 pr-10 text-lg font-extrabold">{route.name}</h3>{route.description && <p className="mt-1 text-sm leading-6 text-slate-600">{route.description}</p>}<p className="mt-2 text-xs text-slate-400">ระยะทางโดยประมาณ {routeDistanceKm(route.path).toFixed(1)} กม. · {route.path.length} จุด</p><a href={googleMapsSafeRouteUrl(route)} target="_blank" rel="noopener noreferrer" className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#16a34a] px-4 py-2.5 text-sm font-extrabold text-white"><Navigation className="h-4 w-4" />นำทางด้วย Google Maps</a></div>;
+}
+
+function RouteSaveDialog({ open, path, onOpenChange, onSuccess }: { open: boolean; path: [number, number][]; onOpenChange: (open: boolean) => void; onSuccess: (route: SafeRoute, token: string) => Promise<void> }) {
+  const [name, setName] = useState(""); const [description, setDescription] = useState(""); const [saving, setSaving] = useState(false);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim() || path.length < 2) return toast.error("กรุณาระบุชื่อและวาดเส้นทางอย่างน้อย 2 จุด");
+    setSaving(true);
+    try {
+      const response = await fetch("/api/safe-routes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), description: description.trim(), path }) });
+      const data = await response.json() as { route?: SafeRoute; deleteToken?: string; error?: string };
+      if (!response.ok || !data.route || !data.deleteToken) throw new Error(data.error || "บันทึกเส้นทางไม่สำเร็จ");
+      setName(""); setDescription(""); await onSuccess(data.route, data.deleteToken);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "บันทึกเส้นทางไม่สำเร็จ"); }
+    finally { setSaving(false); }
+  }
+  return <Dialog open={open} onOpenChange={(next) => { if (!saving) onOpenChange(next); }}><DialogContent className="w-[calc(100%-1.5rem)] max-w-md rounded-3xl p-5 sm:p-6"><DialogHeader><DialogTitle className="flex items-center gap-2"><Route className="h-5 w-5 text-[#0891b2]" />บันทึกเส้นทางปลอดน้ำท่วม</DialogTitle><DialogDescription>เส้นทางมี {path.length} จุด ระยะทางประมาณ {routeDistanceKm(path).toFixed(1)} กม.</DialogDescription></DialogHeader><form onSubmit={submit} className="mt-4 space-y-4"><div><label className="mb-2 block text-sm font-bold">ชื่อเส้นทาง *</label><input required value={name} onChange={(event) => setName(event.target.value)} maxLength={100} placeholder="เช่น ถนนเลี่ยงตลาดไปโรงพยาบาล" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-cyan-600" /></div><div><label className="mb-2 block text-sm font-bold">รายละเอียดเพิ่มเติม</label><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} rows={3} placeholder="บอกจุดเริ่มต้น ปลายทาง หรือข้อควรระวัง" className="w-full resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-cyan-600" /></div><button disabled={saving} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0891b2] font-extrabold text-white disabled:opacity-60">{saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}{saving ? "กำลังบันทึก..." : "ยืนยันบันทึกเส้นทาง"}</button></form></DialogContent></Dialog>;
+}
+
+function RouteListDialog({ open, routes, onOpenChange, onCreate, onSelect }: { open: boolean; routes: SafeRoute[]; onOpenChange: (open: boolean) => void; onCreate: () => void; onSelect: (id: string) => void }) {
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="!left-auto !right-0 !top-0 flex h-[100dvh] w-full !max-w-md !translate-x-0 !translate-y-0 flex-col overflow-hidden rounded-none border-0 p-0 sm:rounded-l-3xl"><DialogHeader className="safe-panel-header bg-[#0e7490] px-5 pb-5 pt-5 text-left text-white"><DialogTitle className="text-2xl font-extrabold">เส้นทางปลอดน้ำท่วม</DialogTitle><DialogDescription className="text-white/75">กดรายการเพื่อแสดงเส้นทางบนแผนที่</DialogDescription></DialogHeader><div className="min-h-0 flex-1 overflow-y-auto p-4">{routes.length === 0 ? <div className="py-12 text-center"><Route className="mx-auto h-10 w-10 text-cyan-600" /><p className="mt-3 font-extrabold">ยังไม่มีเส้นทางที่บันทึก</p><p className="mt-1 text-sm text-slate-500">ช่วยชุมชนด้วยการเพิ่มเส้นทางที่น้ำไม่ท่วม</p></div> : <div className="space-y-3">{routes.map((route) => <button type="button" key={route.id} onClick={() => onSelect(route.id)} className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-cyan-400"><div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-green-100 text-green-700"><Route className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="truncate font-extrabold">{route.name}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{route.description || "เส้นทางที่ผู้ใช้ยืนยันว่าไม่มีน้ำท่วม"}</p><p className="mt-2 text-[11px] font-semibold text-cyan-700">{routeDistanceKm(route.path).toFixed(1)} กม. · {timeAgo(route.createdAt)}</p></div></div></button>)}</div>}</div><div className="safe-panel-footer border-t border-slate-100 bg-white p-4"><button type="button" onClick={onCreate} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0891b2] font-extrabold text-white"><Plus className="h-5 w-5" />บันทึกเส้นทางใหม่</button></div></DialogContent></Dialog>;
 }
 
 function ImageViewer({ viewer, onChange }: { viewer: { urls: string[]; index: number } | null; onChange: (viewer: { urls: string[]; index: number } | null) => void }) {

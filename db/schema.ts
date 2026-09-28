@@ -20,3 +20,14 @@ export const floodReports = sqliteTable("flood_reports", {
   index("idx_flood_reports_created_at").on(table.createdAt),
   index("idx_flood_reports_severity_created_at").on(table.severity, table.createdAt),
 ]);
+
+export const safeRoutes = sqliteTable("safe_routes", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  path: text("path").notNull(),
+  deleteSecretHash: text("delete_secret_hash").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [
+  index("idx_safe_routes_created_at").on(table.createdAt),
+]);

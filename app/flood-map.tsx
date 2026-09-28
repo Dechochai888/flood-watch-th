@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CloudRain, Loader2, Pause, Play } from "lucide-react";
 import "leaflet/dist/leaflet.css";
-import type { FloodReport } from "./flood-app";
+import type { FloodReport, SafeRoute } from "./flood-app";
 
 const colors = { low: "#eab308", medium: "#f97316", high: "#e11d48" };
 const layers = {
@@ -20,24 +20,34 @@ const layers = {
 export type MapStyle = keyof typeof layers;
 type RainFrame = { time: number; path: string };
 
-export function FloodMap({ reports, position, locationReady, selectedId, mapStyle, rainEnabled, onSelect, onPickLocation }: {
+export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, position, locationReady, selectedId, selectedRouteId, mapStyle, rainEnabled, onSelect, onSelectRoute, onPickLocation, onAddRoutePoint }: {
   reports: FloodReport[];
+  safeRoutes: SafeRoute[];
+  routePoints: [number, number][];
+  routeDrawing: boolean;
   position: [number, number];
   locationReady: boolean;
   selectedId: string | null;
+  selectedRouteId: string | null;
   mapStyle: MapStyle;
   rainEnabled: boolean;
   onSelect: (id: string) => void;
+  onSelectRoute: (id: string) => void;
   onPickLocation: (lat: number, lng: number) => void;
+  onAddRoutePoint: (lat: number, lng: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const markerLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const safeRouteLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const drawingLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const baseLayerRef = useRef<import("leaflet").TileLayer | null>(null);
   const radarLayerRef = useRef<import("leaflet").TileLayer | null>(null);
   const pickerRef = useRef<import("leaflet").Marker | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const onPickLocationRef = useRef(onPickLocation);
+  const onAddRoutePointRef = useRef(onAddRoutePoint);
+  const routeDrawingRef = useRef(routeDrawing);
   const initialPositionRef = useRef(position);
   const [mapReady, setMapReady] = useState(false);
   const [rainStatus, setRainStatus] = useState<{ state: "off" | "loading" | "ready" | "error"; message?: string }>({ state: "off" });
@@ -49,6 +59,8 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
   const radarTimeFormatter = useMemo(() => new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }), []);
 
   useEffect(() => { onPickLocationRef.current = onPickLocation; }, [onPickLocation]);
+  useEffect(() => { onAddRoutePointRef.current = onAddRoutePoint; }, [onAddRoutePoint]);
+  useEffect(() => { routeDrawingRef.current = routeDrawing; }, [routeDrawing]);
 
   useEffect(() => {
     let mounted = true;
@@ -58,9 +70,11 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
       const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(initialPositionRef.current, 12);
       baseLayerRef.current = L.tileLayer(layers.street.url, layers.street.options).addTo(map);
       L.control.zoom({ position: "bottomright" }).addTo(map);
+      safeRouteLayerRef.current = L.layerGroup().addTo(map);
+      drawingLayerRef.current = L.layerGroup().addTo(map);
       markerLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
-      map.on("click", (event) => onPickLocationRef.current(event.latlng.lat, event.latlng.lng));
+      map.on("click", (event) => routeDrawingRef.current ? onAddRoutePointRef.current(event.latlng.lat, event.latlng.lng) : onPickLocationRef.current(event.latlng.lat, event.latlng.lng));
       setMapReady(true);
     });
     return () => { mounted = false; mapRef.current?.remove(); mapRef.current = null; };
@@ -151,11 +165,41 @@ export function FloodMap({ reports, position, locationReady, selectedId, mapStyl
   }, [reports, selectedId, onSelect, mapReady]);
 
   useEffect(() => {
+    const L = leafletRef.current;
+    const layer = safeRouteLayerRef.current;
+    if (!L || !layer || !mapReady) return;
+    layer.clearLayers();
+    safeRoutes.forEach((route) => {
+      if (route.path.length < 2) return;
+      const selected = route.id === selectedRouteId;
+      L.polyline(route.path, { color: selected ? "#f59e0b" : "#16a34a", weight: selected ? 7 : 5, opacity: selected ? 1 : 0.82 }).addTo(layer).on("click", () => onSelectRoute(route.id));
+    });
+  }, [safeRoutes, selectedRouteId, onSelectRoute, mapReady]);
+
+  useEffect(() => {
+    const L = leafletRef.current;
+    const layer = drawingLayerRef.current;
+    if (!L || !layer || !mapReady) return;
+    layer.clearLayers();
+    if (!routeDrawing || routePoints.length === 0) return;
+    if (routePoints.length > 1) L.polyline(routePoints, { color: "#0891b2", weight: 6, opacity: 0.95, dashArray: "10 8" }).addTo(layer);
+    routePoints.forEach((point, index) => L.circleMarker(point, { radius: index === 0 ? 7 : 5, color: "white", weight: 2, fillColor: index === 0 ? "#16a34a" : "#0891b2", fillOpacity: 1 }).addTo(layer));
+  }, [routeDrawing, routePoints, mapReady]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !selectedId) return;
     const selectedReport = reports.find((report) => report.id === selectedId);
     if (selectedReport) map.flyTo([selectedReport.latitude, selectedReport.longitude], Math.max(map.getZoom(), 15), { duration: 0.8 });
   }, [reports, selectedId, mapReady]);
+
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    if (!L || !map || !mapReady || !selectedRouteId) return;
+    const selectedRoute = safeRoutes.find((route) => route.id === selectedRouteId);
+    if (selectedRoute?.path.length) map.fitBounds(L.latLngBounds(selectedRoute.path), { padding: [48, 48], maxZoom: 16 });
+  }, [safeRoutes, selectedRouteId, mapReady]);
 
   useEffect(() => {
     const L = leafletRef.current;

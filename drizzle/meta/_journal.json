@@ -22,6 +22,13 @@
       "when": 1790528173430,
       "tag": "0002_chunky_lord_hawal",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790568939327,
+      "tag": "0003_light_the_call",
+      "breakpoints": true
     }
   ]
 }
