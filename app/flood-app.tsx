@@ -86,6 +86,7 @@ export function FloodApp() {
   const [locationReady, setLocationReady] = useState(false);
   const [mapStyle, setMapStyle] = useState<MapStyle>("street");
   const [rainEnabled, setRainEnabled] = useState(false);
+  const [officialFloodEnabled, setOfficialFloodEnabled] = useState(false);
   const [routeDrawing, setRouteDrawing] = useState(false);
   const [routeTracking, setRouteTracking] = useState(false);
   const [trackingAccuracy, setTrackingAccuracy] = useState<number | null>(null);
@@ -277,7 +278,7 @@ export function FloodApp() {
 
       <section className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] min-h-[calc(100vh-80px)] lg:grid-cols-[minmax(0,1fr)_400px]">
         <div ref={mapSectionRef} className="relative w-full min-w-0 max-w-full min-h-[60dvh] scroll-mt-0 overflow-hidden border-b border-slate-200 lg:min-h-0 lg:border-b-0 lg:border-r">
-          <FloodMap reports={visibleReports} safeRoutes={safeRoutes} routePoints={routePoints} routeDrawing={routeDrawing} routeTracking={routeTracking} position={position} locationReady={locationReady} selectedId={selectedId} selectedRouteId={selectedRouteId} mapStyle={mapStyle} rainEnabled={rainEnabled} onSelect={(id) => { setSelectedRouteId(null); setSelectedId(id); }} onSelectRoute={(id) => { setSelectedId(null); setSelectedRouteId(id); }} onPickLocation={(lat, lng) => { setPosition([lat, lng]); setLocationReady(true); setSelectedId(null); setSelectedRouteId(null); }} onAddRoutePoint={(lat, lng) => setRoutePoints((points) => points.length >= 200 ? points : [...points, [lat, lng]])} />
+          <FloodMap reports={visibleReports} safeRoutes={safeRoutes} routePoints={routePoints} routeDrawing={routeDrawing} routeTracking={routeTracking} position={position} locationReady={locationReady} selectedId={selectedId} selectedRouteId={selectedRouteId} mapStyle={mapStyle} rainEnabled={rainEnabled} officialFloodEnabled={officialFloodEnabled} onSelect={(id) => { setSelectedRouteId(null); setSelectedId(id); }} onSelectRoute={(id) => { setSelectedId(null); setSelectedRouteId(id); }} onPickLocation={(lat, lng) => { setPosition([lat, lng]); setLocationReady(true); setSelectedId(null); setSelectedRouteId(null); }} onAddRoutePoint={(lat, lng) => setRoutePoints((points) => points.length >= 200 ? points : [...points, [lat, lng]])} />
           <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] p-3 sm:p-5">
             <div className="flex items-start justify-between gap-2">
               <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/80 bg-white/95 p-2 shadow-xl shadow-slate-900/10 backdrop-blur sm:max-w-md">
@@ -286,6 +287,7 @@ export function FloodApp() {
               </div>
               <div className="pointer-events-auto flex flex-col items-end gap-2">
                 <div className="flex rounded-xl border border-white/80 bg-white/95 p-1 shadow-xl"><button aria-label="แผนที่ถนน" onClick={() => setMapStyle("street")} className={`grid h-9 w-9 place-items-center rounded-lg ${mapStyle === "street" ? "bg-[#073b4c] text-white" : "text-slate-500"}`}><MapIcon className="h-4 w-4" /></button><button aria-label="แผนที่ดาวเทียม" onClick={() => setMapStyle("satellite")} className={`grid h-9 w-9 place-items-center rounded-lg ${mapStyle === "satellite" ? "bg-[#073b4c] text-white" : "text-slate-500"}`}><Satellite className="h-4 w-4" /></button></div>
+                <button aria-label={officialFloodEnabled ? "ปิดพื้นที่น้ำท่วมทั่วไทย" : "เปิดพื้นที่น้ำท่วมทั่วไทย"} onClick={() => setOfficialFloodEnabled((enabled) => !enabled)} className={`flex min-h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-white/80 px-3 text-xs font-extrabold shadow-xl ${officialFloodEnabled ? "bg-[#0e7490] text-white" : "bg-white/95 text-[#0e7490]"}`}><Layers3 className="h-4 w-4" />{officialFloodEnabled ? "ปิดน้ำท่วมทั่วไทย" : "น้ำท่วมทั่วไทย"}</button>
                 <button aria-label={rainEnabled ? "ปิดเรดาร์ฝน" : "เปิดเรดาร์ฝน"} onClick={() => setRainEnabled((enabled) => !enabled)} className={`flex min-h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-white/80 px-3 text-xs font-extrabold shadow-xl ${rainEnabled ? "bg-[#2563eb] text-white" : "bg-white/95 text-[#1646a0]"}`}><CloudRain className="h-4 w-4" />{rainEnabled ? "ปิดเรดาร์ฝน" : "เปิดเรดาร์ฝน"}</button>
               </div>
             </div>

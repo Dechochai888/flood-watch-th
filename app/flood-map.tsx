@@ -20,7 +20,7 @@ const layers = {
 export type MapStyle = keyof typeof layers;
 type RainFrame = { time: number; path: string };
 
-export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, routeTracking, position, locationReady, selectedId, selectedRouteId, mapStyle, rainEnabled, onSelect, onSelectRoute, onPickLocation, onAddRoutePoint }: {
+export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, routeTracking, position, locationReady, selectedId, selectedRouteId, mapStyle, rainEnabled, officialFloodEnabled, onSelect, onSelectRoute, onPickLocation, onAddRoutePoint }: {
   reports: FloodReport[];
   safeRoutes: SafeRoute[];
   routePoints: [number, number][];
@@ -32,6 +32,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
   selectedRouteId: string | null;
   mapStyle: MapStyle;
   rainEnabled: boolean;
+  officialFloodEnabled: boolean;
   onSelect: (id: string) => void;
   onSelectRoute: (id: string) => void;
   onPickLocation: (lat: number, lng: number) => void;
@@ -44,6 +45,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
   const drawingLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const baseLayerRef = useRef<import("leaflet").TileLayer | null>(null);
   const radarLayerRef = useRef<import("leaflet").TileLayer | null>(null);
+  const officialFloodLayerRef = useRef<import("leaflet").TileLayer | null>(null);
   const pickerRef = useRef<import("leaflet").Marker | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const onPickLocationRef = useRef(onPickLocation);
@@ -52,6 +54,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
   const initialPositionRef = useRef(position);
   const [mapReady, setMapReady] = useState(false);
   const [rainStatus, setRainStatus] = useState<{ state: "off" | "loading" | "ready" | "error"; message?: string }>({ state: "off" });
+  const [officialFloodStatus, setOfficialFloodStatus] = useState<{ state: "off" | "loading" | "ready" | "error"; message?: string; loadedAt?: number }>({ state: "off" });
   const [radarHost, setRadarHost] = useState("");
   const [radarFrames, setRadarFrames] = useState<RainFrame[]>([]);
   const [radarFrameIndex, setRadarFrameIndex] = useState(0);
@@ -89,6 +92,37 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
     baseLayerRef.current = L.tileLayer(layers[mapStyle].url, layers[mapStyle].options).addTo(map);
     baseLayerRef.current.bringToBack();
   }, [mapStyle, mapReady]);
+
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    if (!L || !map || !mapReady) return;
+    let cancelled = false;
+    officialFloodLayerRef.current?.remove();
+    officialFloodLayerRef.current = null;
+    if (!officialFloodEnabled) return;
+
+    queueMicrotask(() => { if (!cancelled) setOfficialFloodStatus({ state: "loading" }); });
+    void fetch("/api/official-flood/status", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) throw new Error("ตรวจสอบบริการข้อมูลน้ำท่วมไม่ได้");
+      const status = await response.json() as { configured?: boolean };
+      if (!status.configured) throw new Error("ยังไม่ได้เชื่อมต่อ GISTDA API Key");
+      if (cancelled) return;
+      const layer = L.tileLayer("/api/official-flood/tiles/{z}/{x}/{y}", {
+        opacity: 0.68,
+        maxZoom: 19,
+        zIndex: 260,
+        attribution: 'พื้นที่น้ำท่วมจากดาวเทียม © <a href="https://disaster.gistda.or.th/" target="_blank" rel="noopener noreferrer">GISTDA</a>',
+      });
+      layer.once("load", () => { if (!cancelled) setOfficialFloodStatus({ state: "ready", loadedAt: Date.now() }); });
+      layer.once("tileerror", () => { if (!cancelled) setOfficialFloodStatus({ state: "error", message: "โหลดภาพพื้นที่น้ำท่วมไม่สำเร็จ กรุณาตรวจสอบ API Key" }); });
+      officialFloodLayerRef.current = layer.addTo(map);
+      map.fitBounds([[5.6, 97.3], [20.6, 105.7]], { padding: [18, 18] });
+    }).catch((error) => {
+      if (!cancelled) setOfficialFloodStatus({ state: "error", message: error instanceof Error ? error.message : "โหลดข้อมูลน้ำท่วมไม่ได้" });
+    });
+    return () => { cancelled = true; officialFloodLayerRef.current?.remove(); officialFloodLayerRef.current = null; };
+  }, [officialFloodEnabled, mapReady]);
 
   useEffect(() => {
     const L = leafletRef.current;
@@ -219,7 +253,14 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
 
   return <>
     <div ref={containerRef} className="h-full min-h-[60dvh] w-full bg-[#dcebee] lg:min-h-[calc(100vh-80px)]" aria-label="แผนที่จุดน้ำท่วมและขอความช่วยเหลือ" />
-    {rainEnabled && <div className="pointer-events-auto absolute right-3 top-[8.25rem] z-[500] w-[min(16rem,calc(100%-1.5rem))] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur sm:right-5 sm:top-[8.75rem]">
+    {officialFloodEnabled && <div className="pointer-events-auto absolute left-3 top-[11.25rem] z-[500] w-[min(14rem,calc(100%-1.5rem))] rounded-2xl border border-cyan-100 bg-white/95 p-3 shadow-xl backdrop-blur sm:left-5 sm:top-[8.75rem]">
+      <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-[#0ea5e9]/70 ring-1 ring-[#0369a1]" /><p className="text-xs font-extrabold text-[#075985]">พื้นที่น้ำท่วมทั่วไทย</p></div>
+      {officialFloodStatus.state === "loading" && <p className="mt-2 flex items-center gap-2 text-[11px] text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" />กำลังโหลดข้อมูล GISTDA...</p>}
+      {officialFloodStatus.state === "ready" && <><p className="mt-2 text-[11px] font-semibold text-slate-600">สีน้ำเงินคือพื้นที่ที่ดาวเทียมตรวจพบในช่วง 3 วันล่าสุด</p><p className="mt-1 text-[9px] text-slate-400">โหลดล่าสุด {new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(officialFloodStatus.loadedAt ?? 0))} น.</p></>}
+      {officialFloodStatus.state === "error" && <p className="mt-2 text-[11px] font-semibold text-rose-600">{officialFloodStatus.message || "ยังโหลดข้อมูลไม่ได้"}</p>}
+      <a href="https://disaster.gistda.or.th/" target="_blank" rel="noopener noreferrer" className="mt-2 block text-[9px] font-semibold text-slate-400 underline">ข้อมูลดาวเทียมโดย GISTDA · ไม่ใช่ทุกซอยแบบทันที</a>
+    </div>}
+    {rainEnabled && <div className={`pointer-events-auto absolute right-3 z-[500] w-[min(16rem,calc(100%-1.5rem))] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur sm:right-5 ${officialFloodEnabled ? "top-[18.5rem] sm:top-[15.75rem]" : "top-[11.25rem] sm:top-[8.75rem]"}`}>
       <div className="flex items-center gap-2"><CloudRain className="h-4 w-4 shrink-0 text-[#2563eb]" /><p className="text-xs font-extrabold text-[#1646a0]">เรดาร์ฝนย้อนหลัง 2 ชั่วโมง</p></div>
       {rainStatus.state === "loading" && <p className="mt-2 flex items-center gap-2 text-[11px] text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" />กำลังโหลดข้อมูลฝน...</p>}
       {rainStatus.state === "error" && <p className="mt-2 text-[11px] font-semibold text-rose-600">{rainStatus.message || "ยังโหลดข้อมูลเรดาร์ไม่ได้"}</p>}
