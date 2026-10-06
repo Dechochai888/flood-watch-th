@@ -108,7 +108,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
       const status = await response.json() as { configured?: boolean };
       if (!status.configured) throw new Error("ยังไม่ได้เชื่อมต่อ GISTDA API Key");
       if (cancelled) return;
-      const layer = L.tileLayer("/api/official-flood/tiles/{z}/{x}/{y}", {
+      const layer = L.tileLayer("/api/official-flood/tiles/{z}/{x}/{y}?scheme=xyz-v2", {
         opacity: 0.68,
         maxZoom: 19,
         zIndex: 260,

@@ -13,8 +13,8 @@ export async function GET(_request: Request, context: { params: Promise<{ z: str
     return Response.json({ error: "พิกัดแผนที่ไม่ถูกต้อง" }, { status: 400 });
   }
 
-  const tmsY = tileCount - 1 - y;
-  const upstreamUrl = `${GISTDA_TMS_URL}/${z}/${x}/${tmsY}?api_key=${encodeURIComponent(apiKey)}`;
+  // GISTDA names this endpoint TMS, but its documented tile rows use the XYZ scheme.
+  const upstreamUrl = `${GISTDA_TMS_URL}/${z}/${x}/${y}?api_key=${encodeURIComponent(apiKey)}`;
   try {
     const upstream = await fetch(upstreamUrl, { headers: { Accept: "image/png,image/webp,*/*" }, cf: { cacheEverything: true, cacheTtl: 600 } });
     const contentType = upstream.headers.get("content-type") || "";
