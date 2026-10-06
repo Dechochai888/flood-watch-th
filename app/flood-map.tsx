@@ -19,6 +19,7 @@ const layers = {
 
 export type MapStyle = keyof typeof layers;
 type RainFrame = { time: number; path: string };
+type OfficialFloodWindow = "1day" | "3days";
 
 export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, routeTracking, position, locationReady, selectedId, selectedRouteId, mapStyle, rainEnabled, officialFloodEnabled, onSelect, onSelectRoute, onPickLocation, onAddRoutePoint }: {
   reports: FloodReport[];
@@ -55,6 +56,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
   const [mapReady, setMapReady] = useState(false);
   const [rainStatus, setRainStatus] = useState<{ state: "off" | "loading" | "ready" | "error"; message?: string }>({ state: "off" });
   const [officialFloodStatus, setOfficialFloodStatus] = useState<{ state: "off" | "loading" | "ready" | "error"; message?: string; loadedAt?: number }>({ state: "off" });
+  const [officialFloodWindow, setOfficialFloodWindow] = useState<OfficialFloodWindow>("1day");
   const [radarHost, setRadarHost] = useState("");
   const [radarFrames, setRadarFrames] = useState<RainFrame[]>([]);
   const [radarFrameIndex, setRadarFrameIndex] = useState(0);
@@ -108,7 +110,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
       const status = await response.json() as { configured?: boolean };
       if (!status.configured) throw new Error("ยังไม่ได้เชื่อมต่อ GISTDA API Key");
       if (cancelled) return;
-      const layer = L.tileLayer("/api/official-flood/tiles/{z}/{x}/{y}?scheme=xyz-v2", {
+      const layer = L.tileLayer(`/api/official-flood/tiles/{z}/{x}/{y}?scheme=xyz-v3&window=${officialFloodWindow}`, {
         opacity: 0.68,
         maxZoom: 19,
         zIndex: 260,
@@ -122,7 +124,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
       if (!cancelled) setOfficialFloodStatus({ state: "error", message: error instanceof Error ? error.message : "โหลดข้อมูลน้ำท่วมไม่ได้" });
     });
     return () => { cancelled = true; officialFloodLayerRef.current?.remove(); officialFloodLayerRef.current = null; };
-  }, [officialFloodEnabled, mapReady]);
+  }, [officialFloodEnabled, officialFloodWindow, mapReady]);
 
   useEffect(() => {
     const L = leafletRef.current;
@@ -255,8 +257,12 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
     <div ref={containerRef} className="h-full min-h-[60dvh] w-full bg-[#dcebee] lg:min-h-[calc(100vh-80px)]" aria-label="แผนที่จุดน้ำท่วมและขอความช่วยเหลือ" />
     {officialFloodEnabled && <div className="pointer-events-auto absolute left-3 top-[11.25rem] z-[500] w-[min(14rem,calc(100%-1.5rem))] rounded-2xl border border-cyan-100 bg-white/95 p-3 shadow-xl backdrop-blur sm:left-5 sm:top-[8.75rem]">
       <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-[#0ea5e9]/70 ring-1 ring-[#0369a1]" /><p className="text-xs font-extrabold text-[#075985]">พื้นที่น้ำท่วมทั่วไทย</p></div>
+      <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-label="เลือกช่วงข้อมูลดาวเทียม">
+        <button type="button" onClick={() => setOfficialFloodWindow("1day")} className={`min-h-8 rounded-lg px-2 text-[10px] font-extrabold ${officialFloodWindow === "1day" ? "bg-[#0e7490] text-white shadow" : "text-slate-500"}`}>ล่าสุด 1 วัน</button>
+        <button type="button" onClick={() => setOfficialFloodWindow("3days")} className={`min-h-8 rounded-lg px-2 text-[10px] font-extrabold ${officialFloodWindow === "3days" ? "bg-[#0e7490] text-white shadow" : "text-slate-500"}`}>ย้อนหลัง 3 วัน</button>
+      </div>
       {officialFloodStatus.state === "loading" && <p className="mt-2 flex items-center gap-2 text-[11px] text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" />กำลังโหลดข้อมูล GISTDA...</p>}
-      {officialFloodStatus.state === "ready" && <><p className="mt-2 text-[11px] font-semibold text-slate-600">สีน้ำเงินคือพื้นที่ที่ดาวเทียมตรวจพบในช่วง 3 วันล่าสุด</p><p className="mt-1 text-[9px] text-slate-400">โหลดล่าสุด {new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(officialFloodStatus.loadedAt ?? 0))} น.</p></>}
+      {officialFloodStatus.state === "ready" && <><p className="mt-2 text-[11px] font-semibold text-slate-600">สีน้ำเงินคือพื้นที่ที่ดาวเทียมตรวจพบ{officialFloodWindow === "1day" ? "ย้อนหลัง 1 วัน" : "ในช่วง 3 วันล่าสุด"}</p><p className="mt-1 text-[9px] text-slate-400">โหลดล่าสุด {new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(officialFloodStatus.loadedAt ?? 0))} น.</p></>}
       {officialFloodStatus.state === "error" && <p className="mt-2 text-[11px] font-semibold text-rose-600">{officialFloodStatus.message || "ยังโหลดข้อมูลไม่ได้"}</p>}
       <a href="https://disaster.gistda.or.th/" target="_blank" rel="noopener noreferrer" className="mt-2 block text-[9px] font-semibold text-slate-400 underline">ข้อมูลดาวเทียมโดย GISTDA · ไม่ใช่ทุกซอยแบบทันที</a>
     </div>}
