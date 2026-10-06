@@ -9,7 +9,7 @@ export async function GET(request: Request, context: { params: Promise<{ z: stri
   const params = await context.params;
   const z = Number(params.z); const x = Number(params.x); const y = Number(params.y);
   const requestedWindow = new URL(request.url).searchParams.get("window");
-  const dataWindow = requestedWindow === "3days" ? "3days" : "1day";
+  const dataWindow = requestedWindow === "1day" ? "1day" : "3days";
   const tileCount = 2 ** z;
   if (!Number.isInteger(z) || z < 0 || z > 19 || !Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= tileCount || y >= tileCount) {
     return Response.json({ error: "พิกัดแผนที่ไม่ถูกต้อง" }, { status: 400 });

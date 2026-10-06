@@ -56,7 +56,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
   const [mapReady, setMapReady] = useState(false);
   const [rainStatus, setRainStatus] = useState<{ state: "off" | "loading" | "ready" | "error"; message?: string }>({ state: "off" });
   const [officialFloodStatus, setOfficialFloodStatus] = useState<{ state: "off" | "loading" | "ready" | "error"; message?: string; loadedAt?: number }>({ state: "off" });
-  const [officialFloodWindow, setOfficialFloodWindow] = useState<OfficialFloodWindow>("1day");
+  const [officialFloodWindow, setOfficialFloodWindow] = useState<OfficialFloodWindow>("3days");
   const [radarHost, setRadarHost] = useState("");
   const [radarFrames, setRadarFrames] = useState<RainFrame[]>([]);
   const [radarFrameIndex, setRadarFrameIndex] = useState(0);
@@ -263,6 +263,7 @@ export function FloodMap({ reports, safeRoutes, routePoints, routeDrawing, route
       </div>
       {officialFloodStatus.state === "loading" && <p className="mt-2 flex items-center gap-2 text-[11px] text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" />กำลังโหลดข้อมูล GISTDA...</p>}
       {officialFloodStatus.state === "ready" && <><p className="mt-2 text-[11px] font-semibold text-slate-600">สีน้ำเงินคือพื้นที่ที่ดาวเทียมตรวจพบ{officialFloodWindow === "1day" ? "ย้อนหลัง 1 วัน" : "ในช่วง 3 วันล่าสุด"}</p><p className="mt-1 text-[9px] text-slate-400">โหลดล่าสุด {new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(officialFloodStatus.loadedAt ?? 0))} น.</p></>}
+      {officialFloodWindow === "1day" && <p className="mt-1 text-[9px] font-semibold text-amber-600">หากวันนี้ดาวเทียมยังไม่ผ่านพื้นที่ อาจยังไม่แสดงสีฟ้า</p>}
       {officialFloodStatus.state === "error" && <p className="mt-2 text-[11px] font-semibold text-rose-600">{officialFloodStatus.message || "ยังโหลดข้อมูลไม่ได้"}</p>}
       <a href="https://disaster.gistda.or.th/" target="_blank" rel="noopener noreferrer" className="mt-2 block text-[9px] font-semibold text-slate-400 underline">ข้อมูลดาวเทียมโดย GISTDA · ไม่ใช่ทุกซอยแบบทันที</a>
     </div>}
